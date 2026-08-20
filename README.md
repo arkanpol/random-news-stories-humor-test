@@ -1,58 +1,49 @@
-# GPT-2 Joke Arena
+# GPT-2 Joke Arena v3
 
-A static GitHub Pages experiment with **10 prompts × 8 GPT-2 answers** and local Elo-style matchmaking.
+The bank now contains **160 real GPT-2 stories**.
 
-## Bank design
+## Standard: 80
+Every one of 10 prompts has:
+- 2 GPT-2 Small
+- 2 GPT-2 Medium
+- 2 GPT-2 Large
+- 2 GPT-2 XL
 
-Each prompt has exactly 8 continuations:
+Settings:
+- seed 1337
+- temperature 0.95
+- top-p 0.95
+- top-k 50
+- 300-word cap
+- natural EOS allowed
 
-- 2 × GPT-2 Small
-- 2 × GPT-2 Medium
-- 2 × GPT-2 Large
-- 2 × GPT-2 XL
+## Telephone: 80
+Every one of the same 10 prompts also has:
+- 2 GPT-2 Small
+- 2 GPT-2 Medium
+- 2 GPT-2 Large
+- 2 GPT-2 XL
 
-The model identity is **not shown in the voting interface**. It is retained in the data for analysis.
+Each telephone story is **300 words = 4 x 75-word hops**.
 
-## Setup
+- hop 1 sees original prompt
+- hop 2 sees only hop 1
+- hop 3 sees only hop 2
+- hop 4 sees only hop 3
 
-1. Open `generate_joke_bank_colab.ipynb` in Google Colab.
-2. Use a GPU runtime.
-3. Run all cells.
-4. Download the generated `joke_bank.json`.
-5. Replace the starter `joke_bank.json` in this folder with the generated one.
-6. Commit/push the folder contents to a GitHub repository.
-7. In GitHub: **Settings → Pages → Deploy from a branch → main / root**.
+The displayed answer concatenates all four hops.
 
-You can also test before publishing: open `index.html` through a simple local web server, or use the site's **Load joke_bank.json** button.
+After voting, the site reveals:
+- GPT-2 model size
+- Standard or Telephone
 
-## Elo matchmaking
+Then click Next matchup.
 
-- Initial rating: 1500
-- K-factor: 32
-- Comparisons are only between answers to the **same prompt**
-- Scheduler prioritizes:
-  1. prompts with fewer battles,
-  2. unseen/less-seen answer pairs,
-  3. pairs with similar Elo
-- Choices: A wins / tie / B wins
-- Left/right position is randomized independently of model identity
+## Publish
+1. Run `generate_joke_bank_colab.ipynb` in Google Colab with GPU.
+2. Download `joke_bank.json`.
+3. Replace the starter `joke_bank.json` in the GitHub repo.
+4. Commit to `main`.
+5. GitHub Pages redeploys.
 
-This gives broad matchup coverage early and increasingly close Elo matches later.
-
-## Persistence
-
-GitHub Pages is static, so ratings and votes are saved in the participant's browser via `localStorage`.
-
-The site can export:
-
-- `joke_arena_votes.csv`
-- `joke_arena_state.json`
-
-That is suitable for collecting files from multiple participants and merging them later. A shared live/global Elo would require a backend/database rather than plain GitHub Pages.
-
-## Files
-
-- `index.html` — GitHub Pages experiment
-- `joke_bank.json` — starter schema; replace with the real generated bank
-- `generate_joke_bank_colab.ipynb` — real GPT-2 bank generator
-- `.nojekyll` — tells GitHub Pages to serve files directly
+Elo is otherwise unchanged: starting Elo 1500, K=32, same-prompt comparisons, unseen pairs prioritized, then similar-rated pairs, randomized A/B placement, localStorage persistence, CSV/JSON export.
