@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GPT-2 Joke Arena</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0f1115;
+      --panel: #171a21;
+      --panel2: #20242d;
+      --text: #f5f7fb;
+      --muted: #aab1bd;
+      --border: #343a46;
+      --accent: #8cb4ff;
+      --good: #88d498;
+      --bad: #ff9b9b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg); color: var(--text);
+    }
+    main { width: min(1200px, calc(100% - 28px)); margin: 28px auto 80px; }
+    h1 { margin: 0 0 6px; font-size: clamp(28px, 5vw, 48px); letter-spacing: -0.03em; }
+    h2 { margin-top: 0; }
+    p { line-height: 1.55; }
+    .muted { color: var(--muted); }
+    .topline { display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+    .stats { display:grid; grid-template-columns:repeat(4,minmax(120px,1fr)); gap:10px; margin:18px 0; }
+    .stat { border:1px solid var(--border); border-radius:14px; padding:12px 14px; background:var(--panel); }
+    .stat b { display:block; font-size:24px; }
+    .prompt {
+      border:1px solid var(--border); border-radius:14px; background:var(--panel); padding:16px 18px; margin:16px 0;
+      font-size:20px; line-height:1.45;
+    }
+    .arena { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .story {
+      border:1px solid var(--border); border-radius:16px; background:var(--panel); padding:18px;
+      white-space:pre-wrap; line-height:1.55; min-height:320px; overflow-wrap:anywhere;
+    }
+    .story h3 { margin:0 0 12px; font-size:18px; color:var(--muted); }
+    .buttons { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin:14px 0 24px; }
+    button, .filelabel {
+      border:1px solid var(--border); background:var(--panel2); color:var(--text);
+      border-radius:12px; padding:11px 14px; font:inherit; cursor:pointer;
+    }
+    button:hover, .filelabel:hover { border-color:var(--accent); }
+    button.primary { background:var(--accent); color:#0d1421; font-weight:700; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    input[type=file] { display:none; }
+    .controls { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
+    details { border:1px solid var(--border); border-radius:14px; padding:12px 14px; margin:14px 0; background:var(--panel); }
+    summary { cursor:pointer; font-weight:700; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; font-size:14px; }
+    th,td { text-align:left; padding:8px 7px; border-bottom:1px solid var(--border); vertical-align:top; }
+    th { color:var(--muted); }
+    .error { border:1px solid #6d3a3a; background:#2a1717; border-radius:14px; padding:14px; margin:18px 0; }
+    .ok { color:var(--good); }
+    .hidden { display:none !important; }
+    .tiny { font-size:12px; }
+    .bar { height:8px; background:#292e38; border-radius:999px; overflow:hidden; }
+    .bar > span { display:block; height:100%; background:var(--accent); }
+    @media (max-width: 760px) {
+      .arena { grid-template-columns:1fr; }
+      .stats { grid-template-columns:repeat(2,1fr); }
+      .buttons { grid-template-columns:1fr; }
+      .story { min-height:0; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <div class="topline">
+    <div>
+      <h1>GPT-2 Joke Arena</h1>
+      <div class="muted">10 prompts · 8 answers each · Elo-style adaptive matchmaking</div>
+    </div>
+    <div id="bankStatus" class="muted">Loading bank…</div>
+  </div>
+
+  <div id="errorBox" class="error hidden"></div>
+
+  <div class="controls">
+    <label class="filelabel" for="bankFile">Load joke_bank.json</label>
+    <input id="bankFile" type="file" accept=".json,application/json">
+    <button id="exportVotes">Export votes CSV</button>
+    <button id="exportState">Export full state JSON</button>
+    <button id="resetState">Reset local ratings</button>
+  </div>
+
+  <section class="stats">
+    <div class="stat"><span class="muted">Battles</span><b id="battleCount">0</b></div>
+    <div class="stat"><span class="muted">Unique pairs</span><b id="pairCount">0</b></div>
+    <div class="stat"><span class="muted">Prompt coverage</span><b id="promptCoverage">0/10</b></div>
+    <div class="stat"><span class="muted">Closest rating gap</span><b id="ratingGap">—</b></div>
+  </section>
+
+  <section id="arenaSection" class="hidden">
+    <div class="prompt"><span class="muted tiny">PROMPT</span><br><strong id="promptText"></strong></div>
+
+    <div class="arena">
+      <article class="story"><h3>Story A</h3><div id="storyLeft"></div></article>
+      <article class="story"><h3>Story B</h3><div id="storyRight"></div></article>
+    </div>
+
+    <div class="buttons">
+      <button id="leftWins" class="primary">A is funnier</button>
+      <button id="tie">Tie / equally funny</button>
+      <button id="rightWins" class="primary">B is funnier</button>
+    </div>
+  </section>
+
+  <details>
+    <summary>Leaderboard</summary>
+    <div class="muted tiny">Model identities are hidden during voting. This table is for analysis.</div>
+    <table>
+      <thead><tr><th>#</th><th>Answer</th><th>Prompt</th><th>Model</th><th>Elo</th><th>W-L-T</th></tr></thead>
+      <tbody id="leaderboard"></tbody>
+    </table>
+  </details>
+
+  <details>
+    <summary>Model summary</summary>
+    <table>
+      <thead><tr><th>Model</th><th>Answers</th><th>Mean Elo</th><th>Battles</th><th>Win rate*</th></tr></thead>
+      <tbody id="modelSummary"></tbody>
+    </table>
+    <div class="muted tiny">*ties count as 0.5.</div>
+  </details>
+
+  <details>
+    <summary>How matchmaking works</summary>
+    <p class="muted">
+      All comparisons stay within the same prompt. The scheduler first prioritizes prompts with fewer battles,
+      then unseen answer-pairs, then pairs with similar Elo. After coverage improves it increasingly behaves like
+      normal Elo matchmaking, pairing similarly rated answers. Initial Elo is 1500 and K=32.
+    </p>
+  </details>
+</main>
+
+<script>
+(() => {
+  const K = 32;
+  const STORAGE_KEY = "gpt2_joke_arena_state_v1";
+  let bank = null;
+  let state = null;
+  let current = null;
+
+  const $ = id => document.getElementById(id);
+
+  function blankState() {
+    return {
+      version: 1,
+      created_at: new Date().toISOString(),
+      ratings: {},
+      records: {},
+      votes: [],
+      pair_counts: {},
+      prompt_battles: {}
+    };
+  }
+
+  function loadState() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || blankState();
+    } catch {
+      return blankState();
+    }
+  }
+
+  function saveState() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function answerList() {
+    return bank.prompts.flatMap(p => p.answers.map(a => ({...a, prompt_id:p.prompt_id, prompt_text:p.text})));
+  }
+
+  function initAnswers() {
+    for (const p of bank.prompts) {
+      state.prompt_battles[p.prompt_id] ??= 0;
+      for (const a of p.answers) {
+        state.ratings[a.answer_id] ??= 1500;
+        state.records[a.answer_id] ??= {wins:0, losses:0, ties:0, battles:0};
+      }
+    }
+    saveState();
+  }
+
+  function pairKey(promptId, a, b) {
+    return `${promptId}::${[a,b].sort().join("::")}`;
+  }
+
+  function expected(ra, rb) {
+    return 1 / (1 + Math.pow(10, (rb - ra) / 400));
+  }
+
+  function chooseMatch() {
+    const eligiblePrompts = bank.prompts.filter(p => p.answers.length >= 2);
+    if (!eligiblePrompts.length) return null;
+
+    const minPromptBattles = Math.min(...eligiblePrompts.map(p => state.prompt_battles[p.prompt_id] || 0));
+    let promptPool = eligiblePrompts.filter(p => (state.prompt_battles[p.prompt_id] || 0) <= minPromptBattles + 1);
+    const prompt = promptPool[Math.floor(Math.random() * promptPool.length)];
+
+    const candidates = [];
+    for (let i = 0; i < prompt.answers.length; i++) {
+      for (let j = i + 1; j < prompt.answers.length; j++) {
+        const a = prompt.answers[i], b = prompt.answers[j];
+        const key = pairKey(prompt.prompt_id, a.answer_id, b.answer_id);
+        const seen = state.pair_counts[key] || 0;
+        const gap = Math.abs(state.ratings[a.answer_id] - state.ratings[b.answer_id]);
+        candidates.push({a,b,key,seen,gap});
+      }
+    }
+
+    const minSeen = Math.min(...candidates.map(x => x.seen));
+    const mostlyUnseen = candidates.filter(x => x.seen === minSeen);
+
+    mostlyUnseen.sort((x,y) => x.gap - y.gap || Math.random() - 0.5);
+    const shortlist = mostlyUnseen.slice(0, Math.max(1, Math.ceil(mostlyUnseen.length * 0.25)));
+    const pair = shortlist[Math.floor(Math.random() * shortlist.length)];
+
+    const swap = Math.random() < 0.5;
+    return {
+      prompt,
+      left: swap ? pair.b : pair.a,
+      right: swap ? pair.a : pair.b,
+      pair_key: pair.key,
+      gap: pair.gap
+    };
+  }
+
+  function renderMatch() {
+    current = chooseMatch();
+    if (!current) return;
+    $("promptText").textContent = current.prompt.text;
+    $("storyLeft").textContent = current.left.text;
+    $("storyRight").textContent = current.right.text;
+    $("ratingGap").textContent = Math.round(current.gap);
+  }
+
+  function recordBattle(leftScore) {
+    if (!current) return;
+
+    const lid = current.left.answer_id;
+    const rid = current.right.answer_id;
+    const ra = state.ratings[lid], rb = state.ratings[rid];
+    const ea = expected(ra, rb);
+    const eb = 1 - ea;
+    const rightScore = 1 - leftScore;
+
+    state.ratings[lid] = ra + K * (leftScore - ea);
+    state.ratings[rid] = rb + K * (rightScore - eb);
+
+    const lr = state.records[lid], rr = state.records[rid];
+    lr.battles++; rr.battles++;
+    if (leftScore === 1) { lr.wins++; rr.losses++; }
+    else if (leftScore === 0) { lr.losses++; rr.wins++; }
+    else { lr.ties++; rr.ties++; }
+
+    state.pair_counts[current.pair_key] = (state.pair_counts[current.pair_key] || 0) + 1;
+    state.prompt_battles[current.prompt.prompt_id] = (state.prompt_battles[current.prompt.prompt_id] || 0) + 1;
+
+    state.votes.push({
+      timestamp: new Date().toISOString(),
+      prompt_id: current.prompt.prompt_id,
+      pair_key: current.pair_key,
+      left_answer_id: lid,
+      right_answer_id: rid,
+      left_model: current.left.model_label,
+      right_model: current.right.model_label,
+      score_left: leftScore,
+      winner_answer_id: leftScore === 1 ? lid : leftScore === 0 ? rid : "TIE",
+      left_elo_before: ra,
+      right_elo_before: rb,
+      left_elo_after: state.ratings[lid],
+      right_elo_after: state.ratings[rid]
+    });
+
+    saveState();
+    renderAll();
+  }
+
+  function renderStats() {
+    $("battleCount").textContent = state.votes.length;
+    $("pairCount").textContent = Object.keys(state.pair_counts).length;
+    const covered = Object.values(state.prompt_battles).filter(x => x > 0).length;
+    $("promptCoverage").textContent = `${covered}/${bank.prompts.length}`;
+  }
+
+  function renderLeaderboard() {
+    const answers = answerList().sort((a,b) => state.ratings[b.answer_id] - state.ratings[a.answer_id]);
+    $("leaderboard").innerHTML = answers.map((a,i) => {
+      const r = state.records[a.answer_id];
+      return `<tr>
+        <td>${i+1}</td>
+        <td>${escapeHtml(a.answer_id)}</td>
+        <td>${escapeHtml(a.prompt_id)}</td>
+        <td>${escapeHtml(a.model_label)}</td>
+        <td>${state.ratings[a.answer_id].toFixed(1)}</td>
+        <td>${r.wins}-${r.losses}-${r.ties}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  function renderModelSummary() {
+    const byModel = {};
+    for (const a of answerList()) {
+      const m = byModel[a.model_label] ||= {ratings:[], battles:0, score:0};
+      m.ratings.push(state.ratings[a.answer_id]);
+      const r = state.records[a.answer_id];
+      m.battles += r.battles;
+      m.score += r.wins + 0.5*r.ties;
+    }
+    $("modelSummary").innerHTML = Object.entries(byModel).map(([name,m]) => {
+      const mean = m.ratings.reduce((x,y)=>x+y,0)/m.ratings.length;
+      const wr = m.battles ? m.score/m.battles : 0;
+      return `<tr><td>${escapeHtml(name)}</td><td>${m.ratings.length}</td><td>${mean.toFixed(1)}</td><td>${m.battles}</td><td>${(wr*100).toFixed(1)}%</td></tr>`;
+    }).join("");
+  }
+
+  function renderAll() {
+    renderStats();
+    renderLeaderboard();
+    renderModelSummary();
+    renderMatch();
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  }
+
+  function validateBank(b) {
+    if (!b || !Array.isArray(b.prompts)) throw new Error("Invalid bank: missing prompts.");
+    if (b.prompts.length !== 10) throw new Error(`Expected 10 prompts; found ${b.prompts.length}.`);
+    for (const p of b.prompts) {
+      if (!Array.isArray(p.answers) || p.answers.length !== 8) {
+        throw new Error(`Prompt ${p.prompt_id} must have exactly 8 answers; found ${p.answers?.length ?? 0}.`);
+      }
+      const counts = {};
+      for (const a of p.answers) counts[a.difficulty] = (counts[a.difficulty] || 0) + 1;
+      for (const d of ["small","medium","large","xl"]) {
+        if (counts[d] !== 2) throw new Error(`Prompt ${p.prompt_id}: expected 2 ${d} answers; found ${counts[d] || 0}.`);
+      }
+    }
+  }
+
+  function activateBank(b, sourceLabel) {
+    validateBank(b);
+    bank = b;
+    state = loadState();
+    initAnswers();
+    $("bankStatus").innerHTML = `<span class="ok">✓ ${escapeHtml(sourceLabel)}</span>`;
+    $("errorBox").classList.add("hidden");
+    $("arenaSection").classList.remove("hidden");
+    renderAll();
+  }
+
+  async function loadDefaultBank() {
+    try {
+      const r = await fetch("./joke_bank.json", {cache:"no-store"});
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const b = await r.json();
+      if (!b.generated) {
+        throw new Error("The included joke_bank.json is only a starter. Run the Colab generator, replace joke_bank.json, then redeploy—or use “Load joke_bank.json” above to test locally.");
+      }
+      activateBank(b, "bank loaded");
+    } catch (e) {
+      $("bankStatus").textContent = "bank not ready";
+      $("errorBox").textContent = e.message;
+      $("errorBox").classList.remove("hidden");
+    }
+  }
+
+  $("bankFile").addEventListener("change", async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    try {
+      const b = JSON.parse(await f.text());
+      activateBank(b, f.name);
+    } catch (err) {
+      $("errorBox").textContent = err.message;
+      $("errorBox").classList.remove("hidden");
+    }
+  });
+
+  $("leftWins").addEventListener("click", () => recordBattle(1));
+  $("tie").addEventListener("click", () => recordBattle(0.5));
+  $("rightWins").addEventListener("click", () => recordBattle(0));
+
+  $("resetState").addEventListener("click", () => {
+    if (!confirm("Reset all local Elo ratings and votes on this browser?")) return;
+    localStorage.removeItem(STORAGE_KEY);
+    state = blankState();
+    if (bank) { initAnswers(); renderAll(); }
+  });
+
+  function download(name, text, type) {
+    const blob = new Blob([text], {type});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 500);
+  }
+
+  $("exportState").addEventListener("click", () => {
+    download("joke_arena_state.json", JSON.stringify({bank_meta:{
+      schema_version:bank?.schema_version,
+      generation_settings:bank?.generation_settings
+    }, state}, null, 2), "application/json");
+  });
+
+  $("exportVotes").addEventListener("click", () => {
+    if (!state?.votes?.length) return alert("No votes yet.");
+    const keys = Object.keys(state.votes[0]);
+    const q = v => `"${String(v ?? "").replaceAll('"','""')}"`;
+    const csv = [keys.join(","), ...state.votes.map(v => keys.map(k => q(v[k])).join(","))].join("\n");
+    download("joke_arena_votes.csv", csv, "text/csv");
+  });
+
+  loadDefaultBank();
+})();
+</script>
+</body>
+</html>
