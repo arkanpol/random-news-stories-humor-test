@@ -1,49 +1,71 @@
-# GPT-2 Joke Arena v3
+# GPT-2 Joke Arena v7
 
-The bank now contains **160 real GPT-2 stories**.
+## 160 stories
 
-## Standard: 80
-Every one of 10 prompts has:
-- 2 GPT-2 Small
-- 2 GPT-2 Medium
-- 2 GPT-2 Large
-- 2 GPT-2 XL
+Each of 10 prompts has:
 
-Settings:
+### 8 Standard
+- 2 Small
+- 2 Medium
+- 2 Large
+- 2 XL
+
+Standard is one normal autocomplete call with natural EOS and a 300-word display cap.
+
+### 8 Telephone
+- 2 Small
+- 2 Medium
+- 2 Large
+- 2 XL
+
+Telephone uses the **original funny 800-word bakeoff generation algorithm**:
+- rolling accumulated text
+- rolling recent-context window when needed
+- EOS suppressed
+- same 256-token chunk behavior
+- same internal 800-word scheduling target
+- stop once at least 300 words exist
+- display the first 300 words
+
+The internal target deliberately remains 800 rather than 300 so the early chunk schedule matches the original runs.
+
+## Seed/settings
+
 - seed 1337
 - temperature 0.95
 - top-p 0.95
 - top-k 50
-- 300-word cap
-- natural EOS allowed
 
-## Telephone: 80
-Every one of the same 10 prompts also has:
-- 2 GPT-2 Small
-- 2 GPT-2 Medium
-- 2 GPT-2 Large
-- 2 GPT-2 XL
+Each model has a separately seeded Standard stream and Telephone stream.
 
-Each telephone story is **300 words = 4 x 75-word hops**.
+## Original validation
 
-- hop 1 sees original prompt
-- hop 2 sees only hop 1
-- hop 3 sees only hop 2
-- hop 4 sees only hop 3
+The exact uploaded original GPT-2 Small and GPT-2 Large 800-word samples are embedded in the Colab notebook.
 
-The displayed answer concatenates all four hops.
+The notebook asserts that:
+- `p01_small_telephone_1`
+- `p01_large_telephone_1`
 
-After voting, the site reveals:
-- GPT-2 model size
-- Standard or Telephone
-
-Then click Next matchup.
+match the **exact first 300 words** of those original uploaded generations.
 
 ## Publish
-1. Run `generate_joke_bank_colab.ipynb` in Google Colab with GPU.
+
+1. Run `generate_joke_bank_colab.ipynb` in GPU Colab.
 2. Download `joke_bank.json`.
-3. Replace the starter `joke_bank.json` in the GitHub repo.
-4. Commit to `main`.
+3. Replace the starter file in GitHub.
+4. Commit to main.
 5. GitHub Pages redeploys.
 
-Elo is otherwise unchanged: starting Elo 1500, K=32, same-prompt comparisons, unseen pairs prioritized, then similar-rated pairs, randomized A/B placement, localStorage persistence, CSV/JSON export.
+The site still reveals model size + Standard/Telephone only after the vote.
+
+
+## v7 empty-chunk robustness
+
+The first attempt for every Telephone chunk is still exactly the original bakeoff
+`model.generate()` call. If that attempt produces a chunk made only of special
+tokens and therefore decodes to zero visible text, v7 retries that same chunk with
+EOS stopping explicitly disabled.
+
+This fallback does not run on ordinary chunks. Therefore the original first-prompt
+Small/Large compatibility check remains meaningful and the Colab notebook still
+asserts exact first-300-word identity against the uploaded originals.

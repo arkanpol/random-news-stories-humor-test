@@ -26,7 +26,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}th,td{t
 <body>
 <main>
 <div class="topline">
-  <div><h1>GPT-2 Joke Arena</h1><div class="muted">10 prompts · 80 standard + 80 telephone stories · Elo matchmaking</div></div>
+  <div><h1>GPT-2 Joke Arena</h1><div class="muted">10 prompts · 80 standard + 80 original-rolling telephone stories · Elo matchmaking</div></div>
   <div id="bankStatus" class="muted">Loading bank…</div>
 </div>
 <div id="errorBox" class="error hidden"></div>
@@ -74,7 +74,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}th,td{t
 </details>
 
 <details><summary>Telephone mode</summary>
-<p class="muted">Telephone stories are 300 words total: four 75-word hops. Hop 1 sees the original prompt. Hop 2 sees only hop 1. Hop 3 sees only hop 2. Hop 4 sees only hop 3. The displayed story is all four hops concatenated, so you can see the drift.</p>
+<p class="muted">Telephone uses the original bakeoff algorithm: generate a chunk with EOS suppressed, append it, feed the accumulated story back into GPT-2, and use a rolling recent-context window as it grows. The internal scheduler remains the original 800-word schedule; the displayed result is cut at 300 words.</p>
 </details>
 </main>
 
@@ -119,7 +119,7 @@ function renderMatch(){
   $("promptText").textContent=current.prompt.text;$("storyLeft").textContent=current.left.text;$("storyRight").textContent=current.right.text;
   $("ratingGap").textContent=Math.round(current.gap);
 }
-function typeLabel(a){return a.generation_type==="telephone"?"Telephone · 4×75-word hops":"Standard · ≤300 words"}
+function typeLabel(a){return a.generation_type==="telephone"?"Telephone · original rolling · 300 words":"Standard · ≤300 words"}
 
 function vote(leftScore){
   if(waiting||!current)return;

@@ -1,0 +1,15 @@
+{
+  "model_id": "openai-community/gpt2",
+  "prompt": "I went to the store yesterday, but",
+  "target_words": 800,
+  "actual_words": 800,
+  "seed": 1337,
+  "temperature": 0.95,
+  "top_p": 0.95,
+  "top_k": 50,
+  "native_context_limit": 1024,
+  "chunks": 7,
+  "seconds": 20.89195156097412,
+  "torch_version": "2.11.0+cu128",
+  "transformers_version": "5.15.0"
+}
